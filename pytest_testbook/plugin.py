@@ -17,10 +17,10 @@ def pytest_addhooks(pluginmanager):
 
 def pytest_collect_file(parent, path):
     if path.ext == ".ipynb":
-        return TestScenario(path, parent)
+        return Testbook(path, parent)
 
 
-class TestScenario(pytest.File):
+class Testbook(pytest.File):
 
     def collect(self):
         nb = nbformat.read(self.fspath.open(), 4)
@@ -54,13 +54,13 @@ class TestScenario(pytest.File):
                     continue
                 if name == "Default Name":
                     continue
-                yield TestStep(self.header, name, self, cell)
+                yield Teststep(self.header, name, self, cell)
 
     def setup(self):
         self.km.restart_kernel()
         self.config.hook.pytest_testbook_kernel_setup(scenario=self)
         for setup in self.test_setup:
-            send_and_execute(self.kc, setup, allow_stdin=False)
+            send_and_execute(self, setup)
 
     def teardown(self):
         self.config.hook.pytest_testbook_kernel_teardown(scenario=self)
@@ -68,11 +68,18 @@ class TestScenario(pytest.File):
         self.km.shutdown_kernel(now=True)
 
 
-class TestException(Exception):
+class TestbookException(Exception):
     """ custom exception for error reporting. """
 
 
-def send_and_execute(kernel, source, item=None, allow_stdin=False):
+def send_and_execute(item, source, allow_stdin=False):
+    if isinstance(item, Testbook):
+        kernel = item.kc
+    elif isinstance(item, Teststep):
+        kernel = item.parent.kc
+    else:
+        raise(TestbookException("Unknown Item"))
+
     run_id = kernel.execute(source, allow_stdin=allow_stdin)
     timeout = 1800  # 1800seconds == 30minutes
     while True:
@@ -81,47 +88,54 @@ def send_and_execute(kernel, source, item=None, allow_stdin=False):
             if reply.get("parent_header", None) and reply["parent_header"].get("msg_id", None) == run_id:
                 break
         except Empty:
-            raise TestException("Timeout of %d seconds exceeded executing cell: %s"(timeout, source))
+            raise TestbookException("Timeout of %d seconds exceeded executing cell: %s"(timeout, source))
 
     if reply['content']['status'] == 'ok':
         return "Test successfully completed."
 
     elif reply['content']['status'] == 'error':
         _traceback = reply['content']['traceback']
-        if isinstance(item, TestStep):
+        colored_traceback = "\n".join(_traceback)
+        uncolored_traceback = re.sub(r'\x1b[^m]*m', '', "\n".join(_traceback))
+        if isinstance(item, Teststep):
             item._location = (item._location[0], item._location[1], item.header)
             if item.config.getvalue("color") == 'yes':
-                setattr(item, 'traceback', "\n".join(_traceback))
+                setattr(item, 'traceback', colored_traceback)
             else:
-                setattr(item, 'traceback', re.sub(r'\x1b[^m]*m', '', "\n".join(_traceback)))
-        raise TestException(source, _traceback)
+                setattr(item, 'traceback', uncolored_traceback)
+        elif isinstance(item, Testbook):
+            if item.config.getvalue("color") == 'yes':
+                print(colored_traceback)
+            else:
+                print(uncolored_traceback)
+        raise TestbookException(source, _traceback)
 
     elif reply['content']['status'] == 'aborted':
-        raise TestException(source, "Test was aborted")
+        raise TestbookException(source, "Test was aborted")
     else:
         pprint.pprint(reply)
         pprint.pprint(reply['content'])
-        raise TestException(source, "Unknown Status Code")
+        raise TestbookException(source, "Unknown Status Code")
 
 
-class TestStep(pytest.Item):
+class Teststep(pytest.Item):
 
     def __init__(self, header, name, parent, cell):
-        super(TestStep, self).__init__(name, parent)
+        super(Teststep, self).__init__(name, parent)
         self.header = header
         self.cell = cell
 
     def runtest(self):
-        send_and_execute(self.parent.kc, self.cell.source, item=self, allow_stdin = False)
+        send_and_execute(self, self.cell.source)
 
     def repr_failure(self, excinfo):
-        if isinstance(excinfo.value, TestException):
+        if isinstance(excinfo.value, TestbookException):
             try:
                 return ("\n\n".join([self.cell.source, self.traceback]))
             except AttributeError:
                 return ("\n\n".join([self.cell.source, "\n".join(excinfo.value.args)]))
         else:
-            return super(TestStep, self).repr_failure(excinfo)
+            return super(Teststep, self).repr_failure(excinfo)
 
 
 def pytest_addoption(parser):
@@ -136,6 +150,3 @@ def pytest_addoption(parser):
 
     # parser.addini('HELLO', 'Dummy pytest.ini setting')
 
-# @pytest.fixture
-# def bar(request):
-#     return request.config.option.dest_foo
