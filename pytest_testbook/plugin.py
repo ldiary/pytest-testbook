@@ -12,7 +12,7 @@ from jupyter_client import KernelManager
 def pytest_addhooks(pluginmanager):
     """Register plugin hooks."""
     from pytest_testbook import hooks
-    pluginmanager.addhooks(hooks)
+    pluginmanager.add_hookspecs(hooks)
 
 
 def pytest_collect_file(parent, path):
