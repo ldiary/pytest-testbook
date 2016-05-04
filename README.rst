@@ -9,7 +9,7 @@ pytest-testbook
     :target: https://ci.appveyor.com/project/ldiary/pytest-testbook/branch/master
     :alt: See Build Status on AppVeyor
 
-A plugin to run tests written in Jupyter notebook
+A plugin for executing tests written in Jupyter notebook
 
 ----
 
@@ -25,7 +25,9 @@ Features
 Requirements
 ------------
 
-* TODO
+* Latest version of Python (currently Python 3.5); Sorry, I haven't tested it on Python 2.7 or any other versions.
+* Latest version of pytest (currently pytest 2.9)
+* Jupyter
 
 
 Installation
