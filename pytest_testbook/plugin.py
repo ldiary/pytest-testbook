@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-
+import os
+import sys
 import pytest
 import nbformat
 import ntpath
@@ -8,6 +9,8 @@ import pprint
 from queue import Empty
 from jupyter_client import KernelManager
 
+testbook = sys.modules[__name__]
+setup_done = None
 
 def pytest_addhooks(pluginmanager):
     """Register plugin hooks."""
@@ -19,16 +22,32 @@ def pytest_collect_file(parent, path):
     if path.ext == ".ipynb":
         return Testbook(path, parent)
 
+def pytest_sessionstart(session):
+    """ before session.main() is called. """
+    testbook.km = KernelManager()
+    testbook.km.start_kernel()
+    testbook.kc = testbook.km.client()
+    testbook.kc.start_channels()
+    testbook.kc.wait_for_ready()
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """ whole test run finishes. """
+
+    # TODO: Move this code into a hookspec
+    # Quits the browser if it still exists
+    testbook.kc.execute("browser.quit()\n", allow_stdin=False)
+    testbook.kc.stop_channels()
+    testbook.km.shutdown_kernel(now=True)
+
 
 class Testbook(pytest.File):
 
     def collect(self):
         nb = nbformat.read(self.fspath.open(), 4)
-        self.km = KernelManager()
-        self.km.start_kernel()
-        self.kc = self.km.client()
-        self.kc.start_channels()
-        self.kc.wait_for_ready()
+        self.km = testbook.km
+        self.kc = testbook.kc
+
         self.name = ntpath.basename(self.name).replace(".ipynb", "")
 
         name = "Default Name"
@@ -57,15 +76,18 @@ class Testbook(pytest.File):
                 yield Teststep(self.header, name, self, cell)
 
     def setup(self):
-        self.km.restart_kernel()
+        # self.km.restart_kernel()
         self.config.hook.pytest_testbook_kernel_setup(scenario=self)
-        for setup in self.test_setup:
-            send_and_execute(self, setup)
+        # TODO: Move this code into an OPTION
+        if not testbook.setup_done:
+            for setup in self.test_setup:
+                send_and_execute(self, setup)
+            testbook.setup_done = True
 
     def teardown(self):
         self.config.hook.pytest_testbook_kernel_teardown(scenario=self)
-        self.kc.stop_channels()
-        self.km.shutdown_kernel(now=True)
+        # self.kc.stop_channels()
+        # self.km.shutdown_kernel(now=True)
 
 
 class TestbookException(Exception):
@@ -80,6 +102,10 @@ def send_and_execute(item, source, allow_stdin=False):
     else:
         raise(TestbookException("Unknown Item"))
 
+    # Reuse browser
+    if "browser.quit()" in source:
+        source = source.replace("test.browser.quit()", '')
+        source = source.replace("browser.quit()", '')
     run_id = kernel.execute(source, allow_stdin=allow_stdin)
     timeout = 1800  # 1800seconds == 30minutes
     while True:
