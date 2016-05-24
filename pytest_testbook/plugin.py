@@ -51,6 +51,7 @@ class Testbook(pytest.File):
         self.name = ntpath.basename(self.name).replace(".ipynb", "")
 
         name = "Default Name"
+        self.case = ""
         setup = False
         self.test_setup = []
         for cell in nb.cells:
@@ -60,6 +61,10 @@ class Testbook(pytest.File):
                 if '## Test Configurations' in cell.source or '## Environmental Needs' in cell.source:
                     setup = True
                     continue
+                if cell.source.startswith("## TC"):
+                    case, _, _ = cell.source.partition("](https")
+                    self.case = case.replace("## ", "").replace("[", "")
+
                 for step in ["### Given", "### And", "### When", "### Then", "### But"]:
                     if cell.source.startswith(step):
                         setup = False
@@ -73,7 +78,7 @@ class Testbook(pytest.File):
                     continue
                 if name == "Default Name":
                     continue
-                yield Teststep(self.header, name, self, cell)
+                yield Teststep(self.case, self.header, name, self, cell)
 
     def setup(self):
         # self.km.restart_kernel()
@@ -146,8 +151,9 @@ def send_and_execute(item, source, allow_stdin=False):
 
 class Teststep(pytest.Item):
 
-    def __init__(self, header, name, parent, cell):
+    def __init__(self, case, header, name, parent, cell):
         super(Teststep, self).__init__(name, parent)
+        self.case = case
         self.header = header
         self.cell = cell
 
