@@ -28,7 +28,7 @@ setup(
     description='A plugin to run tests written in Jupyter notebook',
     long_description=read('README.rst'),
     packages=["pytest_testbook"],
-    install_requires=['pytest == 2.9.1',
+    install_requires=['pytest >= 2.9.2',
                       'jupyter'],
     classifiers=[
         "Development Status :: 3 - Alpha",
