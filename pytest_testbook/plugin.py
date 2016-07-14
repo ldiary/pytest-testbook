@@ -12,6 +12,7 @@ from jupyter_client import KernelManager
 testbook = sys.modules[__name__]
 setup_done = None
 
+
 def pytest_addhooks(pluginmanager):
     """Register plugin hooks."""
     from pytest_testbook import hooks
@@ -21,6 +22,7 @@ def pytest_addhooks(pluginmanager):
 def pytest_collect_file(parent, path):
     if path.ext == ".ipynb":
         return Testbook(path, parent)
+
 
 def pytest_sessionstart(session):
     """ before session.main() is called. """
@@ -34,7 +36,6 @@ def pytest_sessionstart(session):
 def pytest_sessionfinish(session, exitstatus):
     """ whole test run finishes. """
 
-    # TODO: Move this code into a hookspec
     # Quits the browser if it still exists
     testbook.kc.execute("browser.quit()\n", allow_stdin=False)
     testbook.kc.stop_channels()
@@ -47,7 +48,6 @@ class Testbook(pytest.File):
         nb = nbformat.read(self.fspath.open(), 4)
         self.km = testbook.km
         self.kc = testbook.kc
-
         self.name = ntpath.basename(self.name).replace(".ipynb", "")
 
         name = "Default Name"
@@ -91,8 +91,6 @@ class Testbook(pytest.File):
 
     def teardown(self):
         self.config.hook.pytest_testbook_kernel_teardown(scenario=self)
-        # self.kc.stop_channels()
-        # self.km.shutdown_kernel(now=True)
 
 
 class TestbookException(Exception):
