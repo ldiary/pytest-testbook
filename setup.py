@@ -29,6 +29,7 @@ setup(
     long_description=read('README.rst'),
     packages=["pytest_testbook"],
     install_requires=[
+        'marigoso',
         'jupyter',
         'notebook==4.0.6',
         'ipywidgets==4.1.0',
