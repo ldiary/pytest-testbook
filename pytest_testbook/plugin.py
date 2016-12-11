@@ -84,6 +84,7 @@ class Testbook(pytest.File):
         # self.km.restart_kernel()
         self.config.hook.pytest_testbook_kernel_setup(scenario=self)
         # TODO: Move this code into an OPTION
+        # This is run once and can be re-used on the subsequent testbooks
         if not testbook.setup_done:
             for setup in self.test_setup:
                 send_and_execute(self, setup)

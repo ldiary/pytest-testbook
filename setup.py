@@ -31,7 +31,6 @@ setup(
     install_requires=[
         'marigoso',
         'jupyter',
-        'pytest-testbook',
     ],
     classifiers=[
         "Development Status :: 3 - Alpha",
