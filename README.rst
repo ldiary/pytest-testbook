@@ -1,9 +1,7 @@
 pytest-testbook
 ===================================
 
-.. image:: https://travis-ci.org/ldiary/pytest-testbook.svg?branch=master
-    :target: https://travis-ci.org/ldiary/pytest-testbook
-    :alt: See Build Status on Travis CI
+[![Build Status](https://github.com/ldiary/pytest-testbook/actions/workflows/tests.yml/badge.svg)](https://github.com/ldiary/pytest-testbook/actions/workflows/tests.yml)
 
 .. image:: https://ci.appveyor.com/api/projects/status/github/ldiary/pytest-testbook?branch=master
     :target: https://ci.appveyor.com/project/ldiary/pytest-testbook/branch/master
