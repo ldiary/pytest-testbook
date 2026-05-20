@@ -1,7 +1,8 @@
 pytest-testbook
 ===================================
 
-[![Build Status](https://github.com/ldiary/pytest-testbook/actions/workflows/tests.yml/badge.svg)](https://github.com/ldiary/pytest-testbook/actions/workflows/tests.yml) | [![See Build Status on AppVeyor](https://ci.appveyor.com/api/projects/status/github/ldiary/pytest-testbook?branch=master)](https://ci.appveyor.com/project/ldiary/pytest-testbook/branch/master)
+[![Build Status](https://github.com/ldiary/pytest-testbook/actions/workflows/tests.yml/badge.svg)](https://github.com/ldiary/pytest-testbook/actions/workflows/tests.yml) 
+[![See Build Status on AppVeyor](https://ci.appveyor.com/api/projects/status/github/ldiary/pytest-testbook?branch=master)](https://ci.appveyor.com/project/ldiary/pytest-testbook/branch/master)
 
 Enables writing 1) software requirements, 2) manual testing procedure, and 3) test automation code all in one single Jupyter Notebook. This notebook effectively becomes a `Testbook` because `pytest` can recognize the automated tests inside and execute the tests.
 
