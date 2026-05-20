@@ -25,6 +25,10 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
+        # Install ipykernel so Jupyter has an execution engine
+        pip install ipykernel
+        # Register the kernel as "python3"
+        python -m ipykernel install --user --name python3 --display-name "Python 3"
         # Install your plugin in editable mode along with its dependencies
         pip install -e .
         # Ensure pytest is explicitly installed for the runner
