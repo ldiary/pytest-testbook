@@ -7,12 +7,14 @@ import io
 import shutil
 import textwrap
 import datetime
+import subprocess
 from queue import Empty
 from jupyter_client import KernelManager
 
 # Modern global state management
 _km = None
 _kc = None
+_session = None
 _setup_done = False
 _session_start_time = None
 
@@ -38,8 +40,9 @@ def pytest_collect_file(file_path, parent):
 
 
 def pytest_sessionstart(session):
-    global _km, _kc, _session_start_time
-    _session_start_time = datetime.datetime.now() # Capture start time
+    global _km, _kc, _session_start_time, _session
+    _session = session  # Store the session object
+    _session_start_time = datetime.datetime.now()
     _km = KernelManager()
     _km.start_kernel()
     _kc = _km.client()
@@ -134,25 +137,36 @@ class Testbook(pytest.File):
                 )
                 report_lines.append(f"  {wrapped_text}")
 
-        # 2. Calculate duration
-        end_time = datetime.datetime.now()
-        duration = (end_time - _session_start_time).total_seconds()
+            # 2. Get Plugin Info and Collected Count
+            plugin_list = []
+            # Access pluginmanager from the stored session config
+            for plugin, dist in _session.config.pluginmanager.list_plugin_distinfo():
+                plugin_list.append(f"{dist.project_name}-{dist.version}")
 
-        # 3. Build the Summary Footer
-        summary = []
-        if passed_count > 0: summary.append(f"{passed_count} passed")
-        if failed_count > 0: summary.append(f"{failed_count} failed")
+            plugins_str = "plugins: " + ", ".join(plugin_list)
+            collected_str = f"collected {len(_session.items)} items"
 
-        footer_text = ", ".join(summary)
-        footer = f"{footer_text} in {duration:.2f}s"
+            # 3. Calculate duration
+            end_time = datetime.datetime.now()
+            duration = (end_time - _session_start_time).total_seconds()
 
-        # 4. Construct Final Report
-        header = "=" * 100 + " test session starts " + "=" * 100
-        footer_line = "=" * 100 + f" {footer} " + "=" * 100
+            # 4. Build the Summary Footer
+            summary = []
+            if passed_count > 0: summary.append(f"{passed_count} passed")
+            if failed_count > 0: summary.append(f"{failed_count} failed")
 
-        full_report = f"{header}\n\n" + "\n".join(report_lines) + f"\n\n{footer_line}"
+            footer_text = ", ".join(summary)
+            summary_line = f"{footer_text} in {duration:.2f}s"
 
-        # 5. Save to the notebook
+            # 5. Construct Final Report
+            # Include the plugins and collected info in the header/top section
+            header = "=" * 100 + " test session starts " + "=" * 100
+            meta_info = f"{plugins_str}\n{collected_str}"
+            footer_line = "=" * 100 + f" {summary_line} " + "=" * 100
+
+            full_report = f"{header}\n{meta_info}\n\n" + "\n".join(report_lines) + f"\n\n{footer_line}"
+
+        # 6. Save to the notebook
         if full_report:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             date, _ = timestamp.split("_")
@@ -168,8 +182,39 @@ class Testbook(pytest.File):
             log_content = f"## Test Results\n**Executed at:** {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n```text\n{full_report}\n```"
             nb.cells.append(nbformat.v4.new_markdown_cell(log_content))
 
+            # ... (keep your notebook writing logic) ...
             with new_path.open('w', encoding="utf-8") as f:
                 nbformat.write(nb, f)
+
+            # --- UPDATED: PDF Generation Toggle ---
+            # Check the configuration option passed from conftest.py
+            if self.config.getoption("--generate-pdf"):
+                print(f"Generating PDF for {new_path.name}...")
+
+                import time
+                time.sleep(0.5)
+
+                if new_path.stat().st_size > 0:
+                    try:
+                        # Call the conversion (include --no-input if you want the "Summary" version)
+                        subprocess.run(
+                            [
+                                "jupyter", "nbconvert",
+                                "--to", "webpdf",
+                                "--allow-chromium-download",
+                                str(new_path)
+                            ],
+                            capture_output=True,
+                            text=True
+                        )
+                        print(f"Successfully generated PDF: {new_path.with_suffix('.pdf')}")
+                    except Exception as e:
+                        print(f"PDF Conversion failed: {e}")
+                else:
+                    print("Skipping PDF: File is empty.")
+            else:
+                print("PDF generation disabled via configuration.")
+            # --------------------------------------
 
 class TestbookException(Exception):
     pass
