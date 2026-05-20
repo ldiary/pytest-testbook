@@ -1,11 +1,7 @@
 pytest-testbook
 ===================================
 
-[![Build Status](https://github.com/ldiary/pytest-testbook/actions/workflows/tests.yml/badge.svg)](https://github.com/ldiary/pytest-testbook/actions/workflows/tests.yml)
-
-.. image:: https://ci.appveyor.com/api/projects/status/github/ldiary/pytest-testbook?branch=master
-    :target: https://ci.appveyor.com/project/ldiary/pytest-testbook/branch/master
-    :alt: See Build Status on AppVeyor
+[![Build Status](https://github.com/ldiary/pytest-testbook/actions/workflows/tests.yml/badge.svg)](https://github.com/ldiary/pytest-testbook/actions/workflows/tests.yml) | [![See Build Status on AppVeyor](https://ci.appveyor.com/api/projects/status/github/ldiary/pytest-testbook?branch=master)](https://ci.appveyor.com/project/ldiary/pytest-testbook/branch/master)
 
 A plugin for executing tests written in Jupyter notebook
 
