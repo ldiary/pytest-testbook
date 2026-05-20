@@ -3,57 +3,68 @@ import os
 import sys
 import pytest
 import nbformat
-import ntpath
 import re
 import pprint
+from pathlib import Path
 from queue import Empty
 from jupyter_client import KernelManager
 
-testbook = sys.modules[__name__]
-setup_done = None
+# Modern global state management (replacing sys.modules hack)
+_km = None
+_kc = None
+_setup_done = False
 
 
 def pytest_addhooks(pluginmanager):
     """Register plugin hooks."""
-    from pytest_testbook import hooks
-    pluginmanager.add_hookspecs(hooks)
+    try:
+        from pytest_testbook import hooks
+        pluginmanager.add_hookspecs(hooks)
+    except ImportError:
+        pass  # Handle gracefully if the hooks module is unavailable
 
 
-def pytest_collect_file(parent, path):
-    if path.ext == ".ipynb":
-        return Testbook(path, parent)
+def pytest_collect_file(file_path, parent):
+    """Modern pytest hook using pathlib.Path (file_path)."""
+    if file_path.suffix == ".ipynb":
+        # Use from_parent instead of direct instantiation
+        return Testbook.from_parent(parent, path=file_path)
 
 
 def pytest_sessionstart(session):
     """ before session.main() is called. """
-    testbook.km = KernelManager()
-    testbook.km.start_kernel()
-    testbook.kc = testbook.km.client()
-    testbook.kc.start_channels()
-    testbook.kc.wait_for_ready()
+    global _km, _kc
+    _km = KernelManager()
+    _km.start_kernel()
+    _kc = _km.client()
+    _kc.start_channels()
+    _kc.wait_for_ready()
 
 
 def pytest_sessionfinish(session, exitstatus):
     """ whole test run finishes. """
-
-    # Quits the browser if it still exists
-    testbook.kc.execute("browser.quit()\n", allow_stdin=False)
-    testbook.kc.stop_channels()
-    testbook.km.shutdown_kernel(now=True)
+    global _km, _kc
+    if _kc:
+        # Quits the browser if it still exists
+        _kc.execute("try:\n    browser.quit()\nexcept:\n    pass\n", allow_stdin=False)
+        _kc.stop_channels()
+    if _km:
+        _km.shutdown_kernel(now=True)
 
 
 class Testbook(pytest.File):
-
     def collect(self):
-        nb = nbformat.read(self.fspath.open(), 4)
-        self.km = testbook.km
-        self.kc = testbook.kc
-        self.name = ntpath.basename(self.name).replace(".ipynb", "")
+        # Modern pytest uses self.path (pathlib.Path)
+        nb = nbformat.read(self.path.open(encoding="utf-8"), 4)
 
-        name = "Default Name"
+        self.km = _km
+        self.kc = _kc
         self.case = ""
         setup = False
         self.test_setup = []
+
+        name = "Default_Name"
+
         for cell in nb.cells:
             if cell.cell_type == 'markdown':
                 if "## Test Results" in cell.source:
@@ -69,29 +80,41 @@ class Testbook(pytest.File):
                     if cell.source.startswith(step):
                         setup = False
                         self.header = cell.source.split("\n")[0].replace("### ", "")
-                        header = re.sub(r'### |\(|\)|\"|\'', '', self.header)
-                        self.header = ".".join([self.name, self.header])
-                        name = header.strip().replace(" ", "_").lower()
-            if cell.cell_type == 'code' and nb.metadata.kernelspec.language == 'python':
+                        header_clean = re.sub(r'### |\(|\)|\"|\'', '', self.header)
+                        # Modern path name resolution
+                        self.header = f"{self.path.stem}.{self.header}"
+                        name = header_clean.strip().replace(" ", "_").lower()
+
+            elif cell.cell_type == 'code' and nb.metadata.get('kernelspec', {}).get('language') == 'python':
                 if setup:
                     self.test_setup.append(cell.source)
                     continue
-                if name == "Default Name":
+                if name == "Default_Name":
                     continue
-                yield Teststep(self.case, self.header, name, self, cell)
+
+                # Modern node yielding via from_parent
+                yield Teststep.from_parent(
+                    self,
+                    name=name,
+                    case=self.case,
+                    header=self.header,
+                    cell=cell
+                )
 
     def setup(self):
-        # self.km.restart_kernel()
-        self.config.hook.pytest_testbook_kernel_setup(scenario=self)
-        # TODO: Move this code into an OPTION
-        # This is run once and can be re-used on the subsequent testbooks
-        if not testbook.setup_done:
-            for setup in self.test_setup:
-                send_and_execute(self, setup)
-            testbook.setup_done = True
+        # Safely trigger hooks if they exist
+        if hasattr(self.config.hook, 'pytest_testbook_kernel_setup'):
+            self.config.hook.pytest_testbook_kernel_setup(scenario=self)
+
+        global _setup_done
+        if not _setup_done:
+            for setup_code in self.test_setup:
+                send_and_execute(self, setup_code)
+            _setup_done = True
 
     def teardown(self):
-        self.config.hook.pytest_testbook_kernel_teardown(scenario=self)
+        if hasattr(self.config.hook, 'pytest_testbook_kernel_teardown'):
+            self.config.hook.pytest_testbook_kernel_teardown(scenario=self)
 
 
 class TestbookException(Exception):
@@ -104,35 +127,36 @@ def send_and_execute(item, source, allow_stdin=False):
     elif isinstance(item, Teststep):
         kernel = item.parent.kc
     else:
-        raise(TestbookException("Unknown Item"))
+        raise TestbookException("Unknown Item")
 
-    # Reuse browser
-    if "browser.quit()" in source:
-        source = source.replace("test.browser.quit()", '')
-        source = source.replace("browser.quit()", '')
     run_id = kernel.execute(source, allow_stdin=allow_stdin)
-    timeout = 1800  # 1800seconds == 30minutes
+    timeout = 1800  # 1800 seconds == 30 minutes
+
     while True:
         try:
-            reply = kernel.get_shell_msg(block=True, timeout=timeout)
-            if reply.get("parent_header", None) and reply["parent_header"].get("msg_id", None) == run_id:
+            reply = kernel.get_shell_msg(timeout=timeout)
+            if reply.get("parent_header", {}) and reply["parent_header"].get("msg_id") == run_id:
                 break
         except Empty:
-            raise TestbookException("Timeout of %d seconds exceeded executing cell: %s"(timeout, source))
+            # Fixed old string formatting bug here
+            raise TestbookException(f"Timeout of {timeout} seconds exceeded executing cell: {source}")
 
-    if reply['content']['status'] == 'ok':
+    status = reply['content'].get('status')
+
+    if status == 'ok':
         return "Test successfully completed."
 
-    elif reply['content']['status'] == 'error':
-        _traceback = reply['content']['traceback']
+    elif status == 'error':
+        _traceback = reply['content'].get('traceback', [])
         colored_traceback = "\n".join(_traceback)
         uncolored_traceback = re.sub(r'\x1b[^m]*m', '', "\n".join(_traceback))
+
         if isinstance(item, Teststep):
-            item._location = (item._location[0], item._location[1], item.header)
+            item._location = (item.location[0], item.location[1], item.header)
             if item.config.getvalue("color") == 'yes':
-                setattr(item, 'traceback', colored_traceback)
+                item.traceback = colored_traceback
             else:
-                setattr(item, 'traceback', uncolored_traceback)
+                item.traceback = uncolored_traceback
         elif isinstance(item, Testbook):
             if item.config.getvalue("color") == 'yes':
                 print(colored_traceback)
@@ -140,7 +164,7 @@ def send_and_execute(item, source, allow_stdin=False):
                 print(uncolored_traceback)
         raise TestbookException(source, _traceback)
 
-    elif reply['content']['status'] == 'aborted':
+    elif status == 'aborted':
         raise TestbookException(source, "Test was aborted")
     else:
         pprint.pprint(reply)
@@ -150,23 +174,24 @@ def send_and_execute(item, source, allow_stdin=False):
 
 class Teststep(pytest.Item):
 
-    def __init__(self, case, header, name, parent, cell):
-        super(Teststep, self).__init__(name, parent)
-        self.case = case
-        self.header = header
-        self.cell = cell
+    @classmethod
+    def from_parent(cls, parent, *, name, case, header, cell):
+        # Modern initialization overriding from_parent
+        obj = super().from_parent(parent, name=name)
+        obj.case = case
+        obj.header = header
+        obj.cell = cell
+        return obj
 
     def runtest(self):
         send_and_execute(self, self.cell.source)
 
     def repr_failure(self, excinfo):
         if isinstance(excinfo.value, TestbookException):
-            try:
-                return ("\n\n".join([self.cell.source, self.traceback]))
-            except AttributeError:
-                return ("\n\n".join([self.cell.source, "\n".join(excinfo.value.args)]))
-        else:
-            return super(Teststep, self).repr_failure(excinfo)
+            # Modern Python attribute checking
+            tb = getattr(self, 'traceback', "\n".join(str(a) for a in excinfo.value.args))
+            return f"{self.cell.source}\n\n{tb}"
+        return super().repr_failure(excinfo)
 
 
 def pytest_addoption(parser):
@@ -174,10 +199,7 @@ def pytest_addoption(parser):
     group.addoption(
         '--kernel_reuse',
         action='store',
-        dest='dest_foo',
+        dest='dest_foo',  # Note: ensure this destination variable is intentional
         default='no',
         help='Do you want to allow multiple testbooks to be run on the same kernel?'
     )
-
-    # parser.addini('HELLO', 'Dummy pytest.ini setting')
-

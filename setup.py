@@ -29,7 +29,6 @@ setup(
     long_description=read('README.rst'),
     packages=["pytest_testbook"],
     install_requires=[
-        'marigoso',
         'jupyter',
     ],
     classifiers=[
