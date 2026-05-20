@@ -1,1 +1,1 @@
-pytest_plugins = 'pytester'
+
