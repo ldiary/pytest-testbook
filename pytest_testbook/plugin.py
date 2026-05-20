@@ -44,13 +44,24 @@ def pytest_sessionstart(session):
 def pytest_sessionfinish(session, exitstatus):
     """ whole test run finishes. """
     global _km, _kc
-    if _kc:
-        # Quits the browser if it still exists
-        _kc.execute("try:\n    browser.quit()\nexcept:\n    pass\n", allow_stdin=False)
-        _kc.stop_channels()
-    if _km:
-        _km.shutdown_kernel(now=True)
 
+    if _kc:
+        try:
+            # Quits the browser if it still exists
+            _kc.execute("try:\n    browser.quit()\nexcept:\n    pass\n", allow_stdin=False)
+        except Exception:
+            pass  # Ignore if the socket or channel is already closed
+
+        try:
+            _kc.stop_channels()
+        except Exception:
+            pass
+
+    if _km:
+        try:
+            _km.shutdown_kernel(now=True)
+        except Exception:
+            pass
 
 class Testbook(pytest.File):
     def collect(self):
