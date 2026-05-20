@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pytest-testbook"
+dynamic = ["version"]  # 1. Tell the build system the version is dynamic
+description = "A pytest plugin for executing Jupyter Notebooks as tests"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+    { name = "Ernesto D. Luzon Jr." }
+]
+classifiers = [
+    "Framework :: Pytest",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "pytest>=5.4.0",
+    "nbformat",
+    "jupyter_client"
+]
+
+[project.entry-points.pytest11]
+testbook = "pytest_testbook.plugin"
+
+[tool.setuptools.packages.find]
+include = ["pytest_testbook*"]
+
+# 2. Tell setuptools exactly where to find the __version__ variable
+[tool.setuptools.dynamic]
+version = {attr = "pytest_testbook.__version__"}
+
+[project.urls]
+Homepage = "https://github.com/ldiary/pytest-testbook"
+Repository = "https://github.com/ldiary/pytest-testbook"
+"Bug Tracker" = "https://github.com/ldiary/pytest-testbook/issues"
