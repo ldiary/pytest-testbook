@@ -1,39 +1,45 @@
 # -*- coding: utf-8 -*-
-import os
 import sys
 import pytest
 import nbformat
 import re
-import pprint
-from pathlib import Path
+import io
+import shutil
+import textwrap
+import datetime
 from queue import Empty
 from jupyter_client import KernelManager
 
-# Modern global state management (replacing sys.modules hack)
+# Modern global state management
 _km = None
 _kc = None
 _setup_done = False
+_session_start_time = None
+
 
 
 def pytest_addhooks(pluginmanager):
-    """Register plugin hooks."""
     try:
         from pytest_testbook import hooks
         pluginmanager.add_hookspecs(hooks)
     except ImportError:
-        pass  # Handle gracefully if the hooks module is unavailable
+        pass
 
 
 def pytest_collect_file(file_path, parent):
     """Modern pytest hook using pathlib.Path (file_path)."""
     if file_path.suffix == ".ipynb":
+        # Ignore generated report files to prevent infinite test loops
+        if file_path.name.endswith("_report_.ipynb"):
+            return None
+
         # Use from_parent instead of direct instantiation
         return Testbook.from_parent(parent, path=file_path)
 
 
 def pytest_sessionstart(session):
-    """ before session.main() is called. """
-    global _km, _kc
+    global _km, _kc, _session_start_time
+    _session_start_time = datetime.datetime.now() # Capture start time
     _km = KernelManager()
     _km.start_kernel()
     _kc = _km.client()
@@ -42,57 +48,51 @@ def pytest_sessionstart(session):
 
 
 def pytest_sessionfinish(session, exitstatus):
-    """ whole test run finishes. """
     global _km, _kc
-
     if _kc:
         try:
-            # Quits the browser if it still exists
             _kc.execute("try:\n    browser.quit()\nexcept:\n    pass\n", allow_stdin=False)
         except Exception:
-            pass  # Ignore if the socket or channel is already closed
-
+            pass
         try:
             _kc.stop_channels()
         except Exception:
             pass
-
     if _km:
         try:
             _km.shutdown_kernel(now=True)
         except Exception:
             pass
 
+
 class Testbook(pytest.File):
     def collect(self):
-        # Modern pytest uses self.path (pathlib.Path)
-        nb = nbformat.read(self.path.open(encoding="utf-8"), 4)
+        # 1. Initialize the storage list for our Teststeps
+        self._teststeps = []
 
+        nb = nbformat.read(self.path.open(encoding="utf-8"), 4)
         self.km = _km
         self.kc = _kc
         self.case = ""
         setup = False
         self.test_setup = []
-
         name = "Default_Name"
 
         for cell in nb.cells:
+            # ... (your existing markdown parsing logic) ...
             if cell.cell_type == 'markdown':
-                if "## Test Results" in cell.source:
-                    return
+                if "## Test Results" in cell.source: continue
                 if '## Test Configurations' in cell.source or '## Environmental Needs' in cell.source:
-                    setup = True
+                    setup = True;
                     continue
                 if cell.source.startswith("## TC"):
                     case, _, _ = cell.source.partition("](https")
                     self.case = case.replace("## ", "").replace("[", "")
-
                 for step in ["### Given", "### And", "### When", "### Then", "### But"]:
                     if cell.source.startswith(step):
                         setup = False
                         self.header = cell.source.split("\n")[0].replace("### ", "")
                         header_clean = re.sub(r'### |\(|\)|\"|\'', '', self.header)
-                        # Modern path name resolution
                         self.header = f"{self.path.stem}.{self.header}"
                         name = header_clean.strip().replace(" ", "_").lower()
 
@@ -100,117 +100,137 @@ class Testbook(pytest.File):
                 if setup:
                     self.test_setup.append(cell.source)
                     continue
-                if name == "Default_Name":
-                    continue
+                if name == "Default_Name": continue
 
-                # Modern node yielding via from_parent
-                yield Teststep.from_parent(
-                    self,
-                    name=name,
-                    case=self.case,
-                    header=self.header,
-                    cell=cell
-                )
-
-    def setup(self):
-        # Safely trigger hooks if they exist
-        if hasattr(self.config.hook, 'pytest_testbook_kernel_setup'):
-            self.config.hook.pytest_testbook_kernel_setup(scenario=self)
-
-        global _setup_done
-        if not _setup_done:
-            for setup_code in self.test_setup:
-                send_and_execute(self, setup_code)
-            _setup_done = True
+                # 2. Yield the item AND append it to our tracking list
+                item = Teststep.from_parent(self, name=name, case=self.case, header=self.header, cell=cell)
+                self._teststeps.append(item)
+                yield item
 
     def teardown(self):
-        if hasattr(self.config.hook, 'pytest_testbook_kernel_teardown'):
-            self.config.hook.pytest_testbook_kernel_teardown(scenario=self)
+        # 1. Gather results
+        passed_count = 0
+        failed_count = 0
+        report_lines = []
 
+        for child in self._teststeps:
+            status = child.outcome
+            if status == "PASSED":
+                passed_count += 1
+                status_emoji = "✅"
+                status_display = "**PASSED**"
+            else:
+                failed_count += 1
+                status_emoji = "❌"
+                status_display = "**FAILED**"
+
+            report_lines.append(f"{status_emoji} {child.nodeid} {status_display}")
+
+            if child.output.strip():
+                wrapped_text = textwrap.fill(
+                    child.output.strip(),
+                    width=100,
+                    subsequent_indent="    "
+                )
+                report_lines.append(f"  {wrapped_text}")
+
+        # 2. Calculate duration
+        end_time = datetime.datetime.now()
+        duration = (end_time - _session_start_time).total_seconds()
+
+        # 3. Build the Summary Footer
+        summary = []
+        if passed_count > 0: summary.append(f"{passed_count} passed")
+        if failed_count > 0: summary.append(f"{failed_count} failed")
+
+        footer_text = ", ".join(summary)
+        footer = f"{footer_text} in {duration:.2f}s"
+
+        # 4. Construct Final Report
+        header = "=" * 100 + " test session starts " + "=" * 100
+        footer_line = "=" * 100 + f" {footer} " + "=" * 100
+
+        full_report = f"{header}\n\n" + "\n".join(report_lines) + f"\n\n{footer_line}"
+
+        # 5. Save to the notebook
+        if full_report:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            date, _ = timestamp.split("_")
+            new_filename = f"{self.path.stem}_{timestamp}_report_.ipynb"
+            new_path = self.path.parent / "reports" / date / new_filename
+
+            # --- ADDED: Create the directory structure automatically ---
+            new_path.parent.mkdir(parents=True, exist_ok=True)
+            # ---------------------------------------------------------
+
+            shutil.copy(self.path, new_path)
+            nb = nbformat.read(new_path.open(encoding="utf-8"), 4)
+            log_content = f"## Test Results\n**Executed at:** {end_time.strftime('%Y-%m-%d %H:%M:%S')}\n\n```text\n{full_report}\n```"
+            nb.cells.append(nbformat.v4.new_markdown_cell(log_content))
+
+            with new_path.open('w', encoding="utf-8") as f:
+                nbformat.write(nb, f)
 
 class TestbookException(Exception):
-    """ custom exception for error reporting. """
+    pass
 
 
-def send_and_execute(item, source, allow_stdin=False):
-    if isinstance(item, Testbook):
-        kernel = item.kc
-    elif isinstance(item, Teststep):
-        kernel = item.parent.kc
-    else:
-        raise TestbookException("Unknown Item")
+def send_and_execute(item, source):
+    kernel = item.parent.kc
+    run_id = kernel.execute(source, allow_stdin=False)
+    output_buffer = io.StringIO()
 
-    run_id = kernel.execute(source, allow_stdin=allow_stdin)
-    timeout = 1800  # 1800 seconds == 30 minutes
-
+    # Listen to IOPub
     while True:
         try:
-            reply = kernel.get_shell_msg(timeout=timeout)
-            if reply.get("parent_header", {}) and reply["parent_header"].get("msg_id") == run_id:
-                break
+            msg = kernel.get_iopub_msg(timeout=1800)
+            if msg.get("parent_header", {}).get("msg_id") == run_id:
+                msg_type = msg.get("header", {}).get("msg_type")
+                content = msg.get("content", {})
+                if msg_type == "stream":
+                    text = content.get("text", "")
+                    sys.stdout.write(text)
+                    output_buffer.write(text)
+                elif msg_type in ("execute_result", "display_data"):
+                    text = content.get("data", {}).get("text/plain", "")
+                    if text:
+                        output_buffer.write(text + "\n")
+                elif msg_type == "status" and content.get("execution_state") == "idle":
+                    break
         except Empty:
-            # Fixed old string formatting bug here
-            raise TestbookException(f"Timeout of {timeout} seconds exceeded executing cell: {source}")
+            raise TestbookException("Timeout")
 
-    status = reply['content'].get('status')
+    # Check Status
+    reply = kernel.get_shell_msg(timeout=5)
+    if reply['content']['status'] == 'error':
+        raise TestbookException(source, reply['content'].get('traceback', []))
 
-    if status == 'ok':
-        return "Test successfully completed."
-
-    elif status == 'error':
-        _traceback = reply['content'].get('traceback', [])
-        colored_traceback = "\n".join(_traceback)
-        uncolored_traceback = re.sub(r'\x1b[^m]*m', '', "\n".join(_traceback))
-
-        if isinstance(item, Teststep):
-            item._location = (item.location[0], item.location[1], item.header)
-            if item.config.getvalue("color") == 'yes':
-                item.traceback = colored_traceback
-            else:
-                item.traceback = uncolored_traceback
-        elif isinstance(item, Testbook):
-            if item.config.getvalue("color") == 'yes':
-                print(colored_traceback)
-            else:
-                print(uncolored_traceback)
-        raise TestbookException(source, _traceback)
-
-    elif status == 'aborted':
-        raise TestbookException(source, "Test was aborted")
-    else:
-        pprint.pprint(reply)
-        pprint.pprint(reply['content'])
-        raise TestbookException(source, "Unknown Status Code")
+    return output_buffer.getvalue()
 
 
 class Teststep(pytest.Item):
-
     @classmethod
     def from_parent(cls, parent, *, name, case, header, cell):
-        # Modern initialization overriding from_parent
         obj = super().from_parent(parent, name=name)
         obj.case = case
         obj.header = header
         obj.cell = cell
+        obj.output = ""
+        obj.outcome = "PASSED"  # Default status
         return obj
 
     def runtest(self):
-        send_and_execute(self, self.cell.source)
+        try:
+            # Attempt to execute the cell
+            self.output = send_and_execute(self, self.cell.source)
+            self.outcome = "PASSED"
+        except Exception as e:
+            # If execution fails, mark as FAILED and capture error
+            self.outcome = "FAILED"
+            # Append error details to output for the report
+            self.output += f"\n\n--- ERROR ---\n{str(e)}"
+            # Re-raise the exception so pytest knows the test failed in the terminal
+            raise
 
     def repr_failure(self, excinfo):
-        if isinstance(excinfo.value, TestbookException):
-            # Modern Python attribute checking
-            tb = getattr(self, 'traceback', "\n".join(str(a) for a in excinfo.value.args))
-            return f"{self.cell.source}\n\n{tb}"
-        return super().repr_failure(excinfo)
-
-
-def pytest_addoption(parser):
-    group = parser.getgroup('testbook')
-    group.addoption(
-        '--kernel_reuse',
-        action='store',
-        dest='dest_foo',  # Note: ensure this destination variable is intentional
-        default='no',
-        help='Do you want to allow multiple testbooks to be run on the same kernel?'
-    )
+        return f"{self.cell.source}\n\n{excinfo.value}"

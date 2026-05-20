@@ -27,6 +27,7 @@ testbook = "pytest_testbook.plugin"
 
 [tool.setuptools.packages.find]
 include = ["pytest_testbook*"]
+exclude = ["pytest_testbook.tests"]
 
 # 2. Tell setuptools exactly where to find the __version__ variable
 [tool.setuptools.dynamic]
