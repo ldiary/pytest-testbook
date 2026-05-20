@@ -216,20 +216,28 @@ class Teststep(pytest.Item):
         obj.header = header
         obj.cell = cell
         obj.output = ""
-        obj.outcome = "PASSED"  # Default status
+        obj.outcome = "PASSED"
+
+        # Add a flag to the parent (the Testbook) to track setup status
+        if not hasattr(parent, '_setup_run'):
+            parent._setup_run = False
         return obj
 
     def runtest(self):
         try:
-            # Attempt to execute the cell
+            # 1. Arrange: Run setup ONLY ONCE
+            if not self.parent._setup_run:
+                for setup_source in self.parent.test_setup:
+                    send_and_execute(self, setup_source)
+                self.parent._setup_run = True
+
+            # 2. Act: Execute the actual test cell logic
             self.output = send_and_execute(self, self.cell.source)
             self.outcome = "PASSED"
+
         except Exception as e:
-            # If execution fails, mark as FAILED and capture error
             self.outcome = "FAILED"
-            # Append error details to output for the report
             self.output += f"\n\n--- ERROR ---\n{str(e)}"
-            # Re-raise the exception so pytest knows the test failed in the terminal
             raise
 
     def repr_failure(self, excinfo):
