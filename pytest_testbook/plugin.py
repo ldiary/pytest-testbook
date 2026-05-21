@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
-import sys
-import pytest
-import nbformat
-import re
-import io
-import shutil
-import textwrap
 import datetime
-import subprocess
+import io
+import nbformat
+import pytest
 import re
+import shutil
+import subprocess
+import sys
+import textwrap
+import time
+
 from queue import Empty
 from jupyter_client import KernelManager
 
@@ -43,7 +44,6 @@ def get_git_info():
         return "N/A", "N/A"
 
 
-
 def pytest_addhooks(pluginmanager):
     try:
         from pytest_testbook import hooks
@@ -76,15 +76,30 @@ def pytest_sessionstart(session):
 
 def pytest_sessionfinish(session, exitstatus):
     global _km, _kc
+
     if _kc:
+        # 1. Gracefully shut down the Playwright worker thread
+        shutdown_script = """
+try:
+    if 'task_queue' in globals() and 'worker_thread' in globals():
+        task_queue.put(None)
+        worker_thread.join(timeout=5)
+except Exception:
+    pass
+"""
         try:
-            _kc.execute("try:\n    browser.quit()\nexcept:\n    pass\n", allow_stdin=False)
+            _kc.execute(shutdown_script, allow_stdin=False)
+            time.sleep(1)
         except Exception:
             pass
+
+        # 2. Shut down the kernel communication channels
         try:
             _kc.stop_channels()
         except Exception:
             pass
+
+    # 3. Terminate the Jupyter Kernel completely
     if _km:
         try:
             _km.shutdown_kernel(now=True)
@@ -251,6 +266,7 @@ class Testbook(pytest.File):
             else:
                 print("  PDF generation disabled via configuration.")
             # --------------------------------------
+
 
 class TestbookException(Exception):
     pass
