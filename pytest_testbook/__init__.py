@@ -1,4 +1,4 @@
-__version__ = '1.2.5'
+__version__ = '1.2.6'
 
 import warnings
 import sys
@@ -12,14 +12,19 @@ pw_state = {}
 error_state = {'error': None}
 _worker_thread = None
 
-def _playwright_worker():
+
+# 1. Add the headless parameter here
+def _playwright_worker(headless=True):
     if sys.platform == 'win32':
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=DeprecationWarning)
             asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
     pw = sync_playwright().start()
-    browser = pw.chromium.launch(headless=True)
+
+    # 2. Pass it to the chromium launch command
+    browser = pw.chromium.launch(headless=headless)
+
     context = browser.new_context(locale='en-US', timezone_id='America/New_York')
     page = context.new_page()
 
@@ -38,12 +43,20 @@ def _playwright_worker():
     browser.close()
     pw.stop()
 
-def pw_start():
+
+# 3. Add the parameter to your public function with True as default
+def pw_start(headless=True):
     """Starts the Playwright thread if it isn't already running."""
     global _worker_thread
     if _worker_thread is None or not _worker_thread.is_alive():
-        _worker_thread = threading.Thread(target=_playwright_worker, daemon=True)
+        # 4. Use kwargs to pass the argument into the thread's target function
+        _worker_thread = threading.Thread(
+            target=_playwright_worker,
+            kwargs={'headless': headless},
+            daemon=True
+        )
         _worker_thread.start()
+
 
 def pw_stop():
     """Gracefully shuts down the Playwright thread."""
@@ -52,6 +65,7 @@ def pw_stop():
         task_queue.put(None)
         _worker_thread.join(timeout=5)
         _worker_thread = None
+
 
 def pw_execute(func):
     """Sends a task to the background Playwright thread."""

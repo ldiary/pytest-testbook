@@ -1,6 +1,4 @@
 # conftest.py
-import pytest
-
 
 def pytest_addoption(parser):
     group = parser.getgroup("testbook")
