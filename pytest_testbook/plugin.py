@@ -8,6 +8,7 @@ import shutil
 import textwrap
 import datetime
 import subprocess
+import re
 from queue import Empty
 from jupyter_client import KernelManager
 
@@ -17,6 +18,9 @@ _kc = None
 _session = None
 _setup_done = False
 _session_start_time = None
+
+# ANSI escape sequence regex
+ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 
 
@@ -130,12 +134,21 @@ class Testbook(pytest.File):
             report_lines.append(f"{status_emoji} {child.nodeid} {status_display}")
 
             if child.output.strip():
-                wrapped_text = textwrap.fill(
-                    child.output.strip(),
-                    width=100,
-                    subsequent_indent="    "
-                )
-                report_lines.append(f"  {wrapped_text}")
+                # 1. Clean the output
+                clean_output = child.output.strip().replace('\\n', '\n')
+
+                # 2. DECISION: If it looks like a traceback (contains "Traceback"),
+                # don't wrap it. Just print it as-is.
+                if "Traceback" in clean_output:
+                    report_lines.append(f"  {clean_output}")
+                else:
+                    # Otherwise, use textwrap for normal print statements
+                    wrapped_text = textwrap.fill(
+                        clean_output,
+                        width=100,
+                        subsequent_indent="    "
+                    )
+                    report_lines.append(f"  {wrapped_text}")
 
             # 2. Get Plugin Info and Collected Count
             plugin_list = []
@@ -248,7 +261,14 @@ def send_and_execute(item, source):
     # Check Status
     reply = kernel.get_shell_msg(timeout=5)
     if reply['content']['status'] == 'error':
-        raise TestbookException(source, reply['content'].get('traceback', []))
+        # --- CLEAN TRACEBACK LOGIC ---
+        raw_traceback = reply['content'].get('traceback', [])
+        # Strip ANSI codes and convert list to a single clean string
+        clean_traceback = [ANSI_ESCAPE.sub('', line) for line in raw_traceback]
+        readable_traceback = "\n".join(clean_traceback)
+
+        # Raise the exception with the clean traceback
+        raise TestbookException(source, readable_traceback)
 
     return output_buffer.getvalue()
 
@@ -269,17 +289,16 @@ class Teststep(pytest.Item):
         return obj
 
     def runtest(self):
-        try:
-            # 1. Arrange: Run setup ONLY ONCE
-            if not self.parent._setup_run:
-                for setup_source in self.parent.test_setup:
-                    send_and_execute(self, setup_source)
-                self.parent._setup_run = True
+        # 1. Arrange: Run setup if not done
+        if not self.parent._setup_run:
+            for setup_source in self.parent.test_setup:
+                send_and_execute(self, setup_source)
+            self.parent._setup_run = True
 
-            # 2. Act: Execute the actual test cell logic
+        # 2. Execute the notebook cell directly
+        try:
             self.output = send_and_execute(self, self.cell.source)
             self.outcome = "PASSED"
-
         except Exception as e:
             self.outcome = "FAILED"
             self.output += f"\n\n--- ERROR ---\n{str(e)}"
