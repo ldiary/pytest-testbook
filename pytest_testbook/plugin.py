@@ -10,10 +10,11 @@ import sys
 import textwrap
 import time
 
-from queue import Empty
 from jupyter_client import KernelManager
+from pathlib import Path
+from queue import Empty
 
-# Modern global state management
+
 _km = None
 _kc = None
 _session = None
@@ -72,6 +73,26 @@ def pytest_sessionstart(session):
     _kc = _km.client()
     _kc.start_channels()
     _kc.wait_for_ready()
+
+    if _kc:
+        print("\nInjecting Playwright initialization script into the Kernel...")
+
+        try:
+            # 1. Resolve the path to the setup file dynamically
+            # This ensures it works regardless of where you run pytest from
+            setup_file_path = Path(__file__).parent / "playwright_setup.py"
+
+            # 2. Read the entire file as a raw string
+            playwright_init_script = setup_file_path.read_text(encoding="utf-8")
+
+            # 3. Inject the block into the global namespace of the Jupyter Kernel
+            _kc.execute(playwright_init_script, allow_stdin=False)
+            print("Playwright worker thread successfully initialized in the background.")
+
+        except FileNotFoundError:
+            print(f"CRITICAL ERROR: Could not find {setup_file_path}. Playwright will not be initialized.")
+        except Exception as e:
+            print(f"Failed to initialize Playwright in kernel: {e}")
 
 
 def pytest_sessionfinish(session, exitstatus):
