@@ -19,7 +19,8 @@ classifiers = [
 dependencies = [
     "pytest>=5.4.0",
     "nbformat",
-    "jupyter_client"
+    "jupyter_client",
+    "playwright"
 ]
 
 [project.entry-points.pytest11]

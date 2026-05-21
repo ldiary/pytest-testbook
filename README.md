@@ -4,39 +4,52 @@ pytest-testbook
 [![Build Status](https://github.com/ldiary/pytest-testbook/actions/workflows/tests.yml/badge.svg)](https://github.com/ldiary/pytest-testbook/actions/workflows/tests.yml) 
 [![See Build Status on AppVeyor](https://ci.appveyor.com/api/projects/status/github/ldiary/pytest-testbook?branch=master)](https://ci.appveyor.com/project/ldiary/pytest-testbook/branch/master)
 
-Enables writing 1) software requirements, 2) manual testing procedure, and 3) test automation code all in one single Jupyter Notebook. This notebook effectively becomes a `Testbook` because `pytest` can recognize the automated tests inside and execute the tests.
+Question
+-----
+What do you call a Jupyter Notebook filled with test cases?
 
+Answer
+-----
+a `testbook` !
+
+
+Why invent this plugin?
 ----
-
-This `Pytest`_ plugin was generated with `Cookiecutter`_ along with `@hackebrot`_'s `Cookiecutter-pytest-plugin`_ template.
+Because no one can stop you from jotting your test cases inside Jupyter Notebook. In the same way that no one can stop your BA from writing their requirements inside that same Notebook. Moreover, no one can stop the test automation engineer from writing test automation code in that same Notebook. When requirements, test cases, and automation code are written in one single Notebook, this becomes a Testbook.
 
 
 Features
 --------
 
-* TODO
-
-
-Requirements
-------------
-
-* Latest version of Python (currently Python 3.5); Sorry, I haven't tested it on Python 2.7 or any other versions.
-* Latest version of pytest (currently pytest 2.9)
-* Jupyter
+* PDF reports for auditing purposes.
+* `pytest-testbook` managed `playwright` instance.
+* BDD-style tests.
+* Run tests manually in Jupyter or automated using `pytest`
 
 
 Installation
 ------------
+You will need playwright to generate pdf test reports. The side-effect is that you get a free playwright instance that you can use in your Testbooks.
 
-You can install "pytest-testbook" via `pip`_ from `PyPI`_::
-
-    $ pip install pytest-testbook
-
+```
+pip install pytest-testbook
+pip install jupyterlab
+playwright install chromium
+```
 
 Usage
 -----
+Navigate to where your tests folder are located. Then either run:
+```
+jupyter lab
+```
+to run tests manually in Jupyter. Or you can run:
 
-* TODO
+```
+pytest -sv
+```
+instead to let `pytest` discover your tests, collect them and execute them.
+
 
 Contributing
 ------------
@@ -48,21 +61,3 @@ License
 
 Distributed under the terms of the `MIT`_ license, "pytest-testbook" is free and open source software
 
-
-Issues
-------
-
-If you encounter any problems, please `file an issue`_ along with a detailed description.
-
-.. _`Cookiecutter`: https://github.com/audreyr/cookiecutter
-.. _`@hackebrot`: https://github.com/hackebrot
-.. _`MIT`: http://opensource.org/licenses/MIT
-.. _`BSD-3`: http://opensource.org/licenses/BSD-3-Clause
-.. _`GNU GPL v3.0`: http://www.gnu.org/licenses/gpl-3.0.txt
-.. _`Apache Software License 2.0`: http://www.apache.org/licenses/LICENSE-2.0
-.. _`cookiecutter-pytest-plugin`: https://github.com/pytest-dev/cookiecutter-pytest-plugin
-.. _`file an issue`: https://github.com/ldiary/pytest-testbook/issues
-.. _`pytest`: https://github.com/pytest-dev/pytest
-.. _`tox`: https://tox.readthedocs.org/en/latest/
-.. _`pip`: https://pypi.python.org/pypi/pip/
-.. _`PyPI`: https://pypi.python.org/pypi
