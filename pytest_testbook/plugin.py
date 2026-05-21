@@ -23,6 +23,26 @@ _session_start_time = None
 ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 
+def get_git_info():
+    """Returns (branch_name, commit_hash) or (None, None) if not a git repo."""
+    try:
+        # Get branch name
+        branch = subprocess.check_output(
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+            stderr=subprocess.DEVNULL, text=True
+        ).strip()
+
+        # Get full commit hash
+        commit = subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'],
+            stderr=subprocess.DEVNULL, text=True
+        ).strip()
+
+        return branch, commit
+    except Exception:
+        return "N/A", "N/A"
+
+
 
 def pytest_addhooks(pluginmanager):
     try:
@@ -150,6 +170,8 @@ class Testbook(pytest.File):
                     )
                     report_lines.append(f"  {wrapped_text}")
 
+            branch, commit = get_git_info()
+            git_str = f"git commit: {commit}\ngit branch: {branch}"
             # 2. Get Plugin Info and Collected Count
             plugin_list = []
             # Access pluginmanager from the stored session config
@@ -174,7 +196,8 @@ class Testbook(pytest.File):
             # 5. Construct Final Report
             # Include the plugins and collected info in the header/top section
             header = "=" * 100 + " test session starts " + "=" * 100
-            meta_info = f"{plugins_str}\n{collected_str}"
+            # Add git_str to meta_info
+            meta_info = f"{plugins_str}\n{git_str}\n{collected_str}"
             footer_line = "=" * 100 + f" {summary_line} " + "=" * 100
 
             full_report = f"{header}\n{meta_info}\n\n" + "\n".join(report_lines) + f"\n\n{footer_line}"
@@ -202,7 +225,7 @@ class Testbook(pytest.File):
             # --- UPDATED: PDF Generation Toggle ---
             # Check the configuration option passed from conftest.py
             if self.config.getoption("--generate-pdf"):
-                print(f"Generating PDF for {new_path.name}...")
+                print(f"\n  Generating PDF for {new_path.name}...")
 
                 import time
                 time.sleep(0.5)
@@ -220,13 +243,13 @@ class Testbook(pytest.File):
                             capture_output=True,
                             text=True
                         )
-                        print(f"Successfully generated PDF: {new_path.with_suffix('.pdf')}")
+                        print(f"  Successfully generated PDF: {new_path.with_suffix('.pdf')}")
                     except Exception as e:
-                        print(f"PDF Conversion failed: {e}")
+                        print(f"  PDF Conversion failed: {e}")
                 else:
-                    print("Skipping PDF: File is empty.")
+                    print("  Skipping PDF: File is empty.")
             else:
-                print("PDF generation disabled via configuration.")
+                print("  PDF generation disabled via configuration.")
             # --------------------------------------
 
 class TestbookException(Exception):
