@@ -75,51 +75,27 @@ def pytest_sessionstart(session):
     _kc.wait_for_ready()
 
     if _kc:
-        print("\nInjecting Playwright initialization script into the Kernel...")
-
+        print("\nInstructing Kernel to start Playwright via pytest_testbook...")
+        # Note the updated module and function names here
+        init_cmd = "from pytest_testbook import pw_start, pw_execute, pw_stop\npw_start()"
         try:
-            # 1. Resolve the path to the setup file dynamically
-            # This ensures it works regardless of where you run pytest from
-            setup_file_path = Path(__file__).parent / "playwright_setup.py"
-
-            # 2. Read the entire file as a raw string
-            playwright_init_script = setup_file_path.read_text(encoding="utf-8")
-
-            # 3. Inject the block into the global namespace of the Jupyter Kernel
-            _kc.execute(playwright_init_script, allow_stdin=False)
-            print("Playwright worker thread successfully initialized in the background.")
-
-        except FileNotFoundError:
-            print(f"CRITICAL ERROR: Could not find {setup_file_path}. Playwright will not be initialized.")
+            _kc.execute(init_cmd, allow_stdin=False)
         except Exception as e:
-            print(f"Failed to initialize Playwright in kernel: {e}")
+            print(f"Failed to start Playwright: {e}")
 
 
 def pytest_sessionfinish(session, exitstatus):
     global _km, _kc
 
     if _kc:
-        print("\nInjecting Playwright shutdown script into the Kernel...")
+        print("\nInstructing Kernel to stop Playwright...")
         try:
-            # 1. Resolve the path to the shutdown file
-            shutdown_file_path = Path(__file__).parent / "playwright_shutdown.py"
-
-            # 2. Read the script
-            playwright_shutdown_script = shutdown_file_path.read_text(encoding="utf-8")
-
-            # 3. Inject it into the Jupyter Kernel
-            _kc.execute(playwright_shutdown_script, allow_stdin=False)
-
-            # 4. Give the kernel 1 second to process the shutdown gracefully
+            # Note the updated function name here
+            _kc.execute("pw_stop()", allow_stdin=False)
             time.sleep(1)
-            print("Playwright worker thread successfully terminated.")
+        except Exception:
+            pass
 
-        except FileNotFoundError:
-            print(f"WARNING: Could not find {shutdown_file_path}. Skipping graceful Playwright shutdown.")
-        except Exception as e:
-            print(f"Failed to send shutdown command to kernel: {e}")
-
-        # 5. Shut down the kernel communication channels
         try:
             _kc.stop_channels()
         except Exception:
