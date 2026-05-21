@@ -7,7 +7,7 @@ name = "pytest-testbook"
 dynamic = ["version"]  # 1. Tell the build system the version is dynamic
 description = "A pytest plugin for executing Jupyter Notebooks as tests"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.8, <3.15" # This allows anything from 3.8 up to, but not including, 3.15
 authors = [
     { name = "Ernesto D. Luzon Jr." }
 ]
