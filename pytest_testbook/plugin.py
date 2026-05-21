@@ -99,22 +99,27 @@ def pytest_sessionfinish(session, exitstatus):
     global _km, _kc
 
     if _kc:
-        # 1. Gracefully shut down the Playwright worker thread
-        shutdown_script = """
-try:
-    if 'task_queue' in globals() and 'worker_thread' in globals():
-        task_queue.put(None)
-        worker_thread.join(timeout=5)
-except Exception:
-    pass
-"""
+        print("\nInjecting Playwright shutdown script into the Kernel...")
         try:
-            _kc.execute(shutdown_script, allow_stdin=False)
-            time.sleep(1)
-        except Exception:
-            pass
+            # 1. Resolve the path to the shutdown file
+            shutdown_file_path = Path(__file__).parent / "playwright_shutdown.py"
 
-        # 2. Shut down the kernel communication channels
+            # 2. Read the script
+            playwright_shutdown_script = shutdown_file_path.read_text(encoding="utf-8")
+
+            # 3. Inject it into the Jupyter Kernel
+            _kc.execute(playwright_shutdown_script, allow_stdin=False)
+
+            # 4. Give the kernel 1 second to process the shutdown gracefully
+            time.sleep(1)
+            print("Playwright worker thread successfully terminated.")
+
+        except FileNotFoundError:
+            print(f"WARNING: Could not find {shutdown_file_path}. Skipping graceful Playwright shutdown.")
+        except Exception as e:
+            print(f"Failed to send shutdown command to kernel: {e}")
+
+        # 5. Shut down the kernel communication channels
         try:
             _kc.stop_channels()
         except Exception:
