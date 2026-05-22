@@ -2,11 +2,12 @@
 https://docs.python.org/3/library/threading.html
 
 
-## Where is it used?
+## Where is `threading` used?
 `pytest-testbook` plugin uses a separate thread for launching `playwright`. 
 
 https://github.com/ldiary/pytest-testbook/blob/faf99551d7d741cb5424cfe8bc084aa7ba25555e/pytest_testbook/__init__.py#L53-L58
 
+## Why use `threading`?
 When `testbook` (which runs your notebook as a test) and the Jupyter kernel environment have already initialized an `asyncio` event loop, even with `nest_asyncio`, Playwright's `sync_api` detects that a loop is "running" and refuses to start, fearing thread-safety issues. 
 
 To fix this, we need to **decouple** Playwright from the existing event loop by creating a fresh, non-running loop environment specifically for the browser initialization.
