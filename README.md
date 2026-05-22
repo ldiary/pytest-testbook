@@ -58,11 +58,6 @@ pytest -sv
 instead to let `pytest` discover your tests, collect them and execute them.
 
 
-Contributing
-------------
-Contributions are very welcome. Tests can be run with `tox`_, please ensure
-the coverage at least stays the same before you submit a pull request.
-
 License
 -------
 
