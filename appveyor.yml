@@ -15,6 +15,9 @@ install:
   - "%PYTHON%\\python.exe -m pip install -e ."
   - "%PYTHON%\\python.exe -m pip install pytest"
 
+  # --- NEW: Install Playwright Browsers and Windows Dependencies ---
+  - "%PYTHON%\\python.exe -m playwright install --with-deps chromium"
+
 test_script:
   # Run the pytest suite
   - "%PYTHON%\\python.exe -m pytest"
