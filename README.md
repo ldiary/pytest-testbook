@@ -15,21 +15,28 @@ a `testbook` !
 
 Why invent this plugin?
 ----
-Because no one can stop you from jotting your test cases inside Jupyter Notebook. In the same way that no one can stop your BA from writing their requirements inside that same Notebook. Moreover, no one can stop the test automation engineer from writing test automation code in that same Notebook. When requirements, test cases, and automation code are written in one single Notebook, this becomes a Testbook.
+Because it allows specification, test cases, and automation code to be recorded inside a single Jupyter Notebook. When specification, requirements, test cases, and automation code are written in one place, this place is called a `testbook`. 
+
+How to run the tests?
+----
+- Option 1: Follow the manual steps written in the `testbook` and perform each test steps manually.
+- Option 2: Trigger the execution of automated test code by running the each cell directly in Jupyter.
+- Option 3: Use `pytest` to discover tests inside the `testbook` and run them. This option enables your tests to run in CI/CD pipeline. 
 
 
 Features
 --------
 
-* PDF reports for auditing purposes.
-* `pytest-testbook` managed `playwright` instance.
-* BDD-style tests.
-* Run tests manually in Jupyter or automated using `pytest`
+* BDD-style specification, requirements, manual test steps, and test automation code.
+* Auto-generated PDF reports to support auditing processes.
+* Plugin managed `playwright` instance inside Jupyter Notebook.
+* Trigger automated tests execution in Jupyter.
+* Upload `testbook` in CI/CD pipepline for auto-execution using `pytest`
 
 
 Installation
 ------------
-You will need playwright to generate pdf test reports. The side-effect is that you get a free playwright instance that you can use in your Testbooks.
+You will need to install playwright to generate pdf test reports. The side-effect is that you get a free playwright instance that you can use in your Testbooks.
 
 ```
 pip install pytest-testbook
