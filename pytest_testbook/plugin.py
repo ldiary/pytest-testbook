@@ -132,8 +132,6 @@ class Testbook(pytest.File):
                     break  # We found it, no need to check other cells
         # -------------------------------------
 
-
-
         self.case = ""
         setup = False
         self.test_setup = []
@@ -299,7 +297,8 @@ def send_and_execute(item, source):
     # Listen to IOPub
     while True:
         try:
-            msg = kernel.get_iopub_msg(timeout=1800)
+            # If Playwright waits 10 seconds, Jupyter must wait at least 15
+            msg = kernel.get_iopub_msg(timeout=25)
             if msg.get("parent_header", {}).get("msg_id") == run_id:
                 msg_type = msg.get("header", {}).get("msg_type")
                 content = msg.get("content", {})
@@ -314,7 +313,7 @@ def send_and_execute(item, source):
                 elif msg_type == "status" and content.get("execution_state") == "idle":
                     break
         except Empty:
-            raise TestbookException("Timeout")
+            raise Exception("Jupyter Kernel timed out waiting for the cell to finish executing.")
 
     # Check Status
     reply = kernel.get_shell_msg(timeout=5)
