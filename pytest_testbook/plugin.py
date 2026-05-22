@@ -294,11 +294,10 @@ def send_and_execute(item, source):
     run_id = kernel.execute(source, allow_stdin=False)
     output_buffer = io.StringIO()
 
-    # Listen to IOPub
+    # 1. Listen to IOPub (Unchanged - this already filters by msg_id perfectly)
     while True:
         try:
-            # If Playwright waits 10 seconds, Jupyter must wait at least 15
-            msg = kernel.get_iopub_msg(timeout=25)
+            msg = kernel.get_iopub_msg(timeout=1800)
             if msg.get("parent_header", {}).get("msg_id") == run_id:
                 msg_type = msg.get("header", {}).get("msg_type")
                 content = msg.get("content", {})
@@ -313,19 +312,30 @@ def send_and_execute(item, source):
                 elif msg_type == "status" and content.get("execution_state") == "idle":
                     break
         except Empty:
-            raise Exception("Jupyter Kernel timed out waiting for the cell to finish executing.")
+            raise TestbookException("Timeout")
 
-    # Check Status
-    reply = kernel.get_shell_msg(timeout=5)
-    if reply['content']['status'] == 'error':
-        # --- CLEAN TRACEBACK LOGIC ---
-        raw_traceback = reply['content'].get('traceback', [])
-        # Strip ANSI codes and convert list to a single clean string
-        clean_traceback = [ANSI_ESCAPE.sub('', line) for line in raw_traceback]
-        readable_traceback = "\n".join(clean_traceback)
+    # 2. Check Status from Shell (UPDATED LOGIC)
+    # We loop through the queue and throw away old messages until we find the exact reply for THIS cell
+    while True:
+        try:
+            reply = kernel.get_shell_msg(timeout=5)
 
-        # Raise the exception with the clean traceback
-        raise TestbookException(source, readable_traceback)
+            # Check if this reply belongs to the code we just executed
+            if reply.get("parent_header", {}).get("msg_id") == run_id:
+                if reply['content']['status'] == 'error':
+                    # --- CLEAN TRACEBACK LOGIC ---
+                    raw_traceback = reply['content'].get('traceback', [])
+                    clean_traceback = [ANSI_ESCAPE.sub('', line) for line in raw_traceback]
+                    readable_traceback = "\n".join(clean_traceback)
+
+                    # Raise the exception with the clean traceback
+                    raise TestbookException(source, readable_traceback)
+
+                # If status is 'ok', break the loop and return successfully
+                break
+
+        except Empty:
+            raise TestbookException(source, "Shell timeout waiting for cell status.")
 
     return output_buffer.getvalue()
 
