@@ -22,7 +22,7 @@ Please use the Async API instead.
 
 You cannot fix this by setting policies because the Jupyter kernel has already initialized the loop before your code cell ever runs. The only way to run Playwright inside a Jupyter cell on Windows without triggering this loop error is to execute the Playwright code in a completely separate process, not the kernel thread itself.
 
-```
+```python
 import subprocess
 import sys
 import os
@@ -71,7 +71,7 @@ Jupyter runs its protective "event loop" on the main thread. If we put the test 
 
 ## The Architectural Truth: Why Playwright Blocks Your Code
 You want to run this exact, synchronous code inside a Jupyter Notebook cell:
-```
+```python
 from playwright.sync_api import sync_playwright
 
 with sync_playwright() as p:
@@ -94,7 +94,7 @@ You do not need string variables, external files, or subprocesses. It executes n
 ## The persistent: NotImplementedError
 Because we spawned a brand-new thread, Windows gave that new thread its default event loop. On Windows, the default loop (`SelectorEventLoop`) does not support subprocesses. Playwright tried to spawn the Chromium browser process, hit the Windows restriction, and threw the `NotImplementedError`. We need to tell that specific new thread to use the Windows loop policy that allows subprocesses (`ProactorEventLoop`).
 
-```
+```python
 import threading
 import sys
 import asyncio
