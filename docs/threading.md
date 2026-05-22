@@ -91,7 +91,7 @@ We do this using Python's native `threading`. By pushing your exact code into a 
 
 You do not need string variables, external files, or subprocesses. It executes natively right inside your cell. You avoid the Windows Subprocess Error: `NotImplementedError` entirely because the Sync API uses standard OS process creation, completely side-stepping Windows' broken asyncio implementation.
 
-## The persistent: NotImplementedError
+## The persistent: `NotImplementedError`
 Because we spawned a brand-new thread, Windows gave that new thread its default event loop. On Windows, the default loop (`SelectorEventLoop`) does not support subprocesses. Playwright tried to spawn the Chromium browser process, hit the Windows restriction, and threw the `NotImplementedError`. We need to tell that specific new thread to use the Windows loop policy that allows subprocesses (`ProactorEventLoop`).
 
 ```python
