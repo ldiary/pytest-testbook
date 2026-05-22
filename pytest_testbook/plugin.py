@@ -11,7 +11,6 @@ import textwrap
 import time
 
 from jupyter_client import KernelManager
-from pathlib import Path
 from queue import Empty
 
 
@@ -20,6 +19,7 @@ _kc = None
 _session = None
 _setup_done = False
 _session_start_time = None
+_playwright_started = False
 
 # ANSI escape sequence regex
 ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
@@ -74,34 +74,28 @@ def pytest_sessionstart(session):
     _kc.start_channels()
     _kc.wait_for_ready()
 
-    if _kc:
-        print("\nInstructing Kernel to start Playwright via pytest_testbook...")
-        # Note the updated module and function names here
-        init_cmd = "from pytest_testbook import pw_start, pw_execute, pw_stop\npw_start()"
-        try:
-            _kc.execute(init_cmd, allow_stdin=False)
-        except Exception as e:
-            print(f"Failed to start Playwright: {e}")
-
 
 def pytest_sessionfinish(session, exitstatus):
-    global _km, _kc
+    global _km, _kc, _playwright_started
 
     if _kc:
-        print("\nInstructing Kernel to stop Playwright...")
-        try:
-            # Note the updated function name here
-            _kc.execute("pw_stop()", allow_stdin=False)
-            time.sleep(1)
-        except Exception:
-            pass
+        # 1. Only attempt to stop Playwright if we actually started it
+        if _playwright_started:
+            print("\nInstructing Kernel to stop Playwright...")
+            try:
+                _kc.execute("pw_stop()", allow_stdin=False)
+                # Give the kernel 1 second to process the shutdown gracefully
+                time.sleep(1)
+            except Exception:
+                pass
 
+        # 2. Always shut down the kernel communication channels
         try:
             _kc.stop_channels()
         except Exception:
             pass
 
-    # 3. Terminate the Jupyter Kernel completely
+    # 3. Always terminate the Jupyter Kernel completely
     if _km:
         try:
             _km.shutdown_kernel(now=True)
@@ -111,12 +105,35 @@ def pytest_sessionfinish(session, exitstatus):
 
 class Testbook(pytest.File):
     def collect(self):
+        global _playwright_started
         # 1. Initialize the storage list for our Teststeps
         self._teststeps = []
 
         nb = nbformat.read(self.path.open(encoding="utf-8"), 4)
         self.km = _km
         self.kc = _kc
+
+        # --- SMART PLAYWRIGHT LAZY LOADING ---
+        # Only check if we haven't already started it in this session
+        if not _playwright_started:
+            # Look at the first 10 cells to see if this notebook needs Playwright
+            for cell in nb.cells[:10]:
+                if cell.cell_type == 'code' and 'from pytest_testbook import' in cell.source:
+                    print(f"\n[{self.path.name}] Playwright import detected. Instructing Kernel...")
+
+                    # Your proven working command
+                    init_cmd = "from pytest_testbook import pw_start, pw_execute, pw_stop\npw_start()"
+                    try:
+                        self.kc.execute(init_cmd, allow_stdin=False)
+                        _playwright_started = True
+                    except Exception as e:
+                        print(f"Failed to start Playwright: {e}")
+
+                    break  # We found it, no need to check other cells
+        # -------------------------------------
+
+
+
         self.case = ""
         setup = False
         self.test_setup = []
