@@ -33,6 +33,9 @@ jobs:
         pip install -e .
         # Ensure pytest is explicitly installed for the runner
         pip install pytest
+        
+        # --- NEW: Install Playwright Browsers and OS Dependencies ---
+        python -m playwright install --with-deps chromium
 
     - name: Run tests
       run: pytest
