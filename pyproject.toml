@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pytest-testbook"
 dynamic = ["version"]  # 1. Tell the build system the version is dynamic
-description = "A pytest plugin for executing Jupyter Notebooks as tests"
+description = "Enables pytest to execute your Jupyter Notebook as a test"
 readme = "README.md"
-requires-python = ">=3.8, <3.15" # This allows anything from 3.8 up to, but not including, 3.15
+requires-python = ">=3.8, <3.15" # This limitation is caused by conflicts in how Jupyter kernel runs asynio even loop in Windows and how Playwright behaves when detecting such event loops inside its process.
 authors = [
     { name = "Ernesto D. Luzon Jr." }
 ]
