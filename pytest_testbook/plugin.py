@@ -269,15 +269,15 @@ class Testbook(pytest.File):
                         # Call the conversion
                         result = subprocess.run(
                             [
-                                "jupyter", "nbconvert",
+                                "python", "-m", "nbconvert",       # <--- Bypasses jupyter-nbconvert.EXE completely
                                 "--to", "webpdf",
                                 "--allow-chromium-download",
-                                "--output-dir", report_folder,  # <--- Explicitly target your report folder
+                                "--output-dir", report_folder,
                                 str(new_path)
                             ],
                             capture_output=True,
                             text=True,
-                            check=True  # <--- CRITICAL: Forces Python to raise an error if Jupyter fails
+                            check=True
                         )
 
                         # If it gets here, it genuinely worked
