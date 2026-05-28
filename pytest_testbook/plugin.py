@@ -254,49 +254,36 @@ class Testbook(pytest.File):
             with new_path.open('w', encoding="utf-8") as f:
                 nbformat.write(nb, f)
 
-            # --- UPDATED: PDF Generation Toggle with Error Checking ---
-            if self.config.getoption("--generate-pdf"):
-                print(f"\n  Generating PDF for {new_path.name}...")
+                # --- UPDATED: PDF Generation Toggle ---
+                # Check the configuration option passed from conftest.py
+                if self.config.getoption("--generate-pdf"):
+                    print(f"\n  Generating PDF for {new_path.name}...")
 
-                import time
-                time.sleep(0.5)
+                    import time
+                    time.sleep(0.5)
 
-                if new_path.stat().st_size > 0:
-                    # Define where you actually want the PDF to go
-                    report_folder = "C:\\Users\\m6nsa\\github\\machnet-robotics\\reports" # <-- Adjust this path!
-
-                    try:
-                        # Call the conversion
-                        result = subprocess.run(
-                            [
-                                "python", "-m", "nbconvert",       # <--- Bypasses jupyter-nbconvert.EXE completely
-                                "--to", "webpdf",
-                                "--allow-chromium-download",
-                                "--output-dir", report_folder,
-                                str(new_path)
-                            ],
-                            capture_output=True,
-                            text=True,
-                            check=True
-                        )
-
-                        # If it gets here, it genuinely worked
-                        expected_pdf = pathlib.Path(report_folder) / new_path.with_suffix('.pdf').name
-                        print(f"  Successfully generated PDF at: {expected_pdf}")
-
-                    except subprocess.CalledProcessError as e:
-                        # This captures the hidden error from Jupyter
-                        print(f"  ❌ PDF Conversion failed with exit code {e.returncode}!")
-                        print(f"  --- JUPYTER ERROR LOGS ---")
-                        print(e.stderr)  # <--- This will tell you exactly WHY it was failing before
-                        print(f"  --------------------------")
-                    except Exception as e:
-                        print(f"  An unexpected error occurred: {e}")
+                    if new_path.stat().st_size > 0:
+                        try:
+                            # Call the conversion (include --no-input if you want the "Summary" version)
+                            subprocess.run(
+                                [
+                                    "jupyter", "nbconvert",
+                                    "--to", "webpdf",
+                                    "--allow-chromium-download",
+                                    str(new_path)
+                                ],
+                                capture_output=True,
+                                text=True,
+                                check=True
+                            )
+                            print(f"  Successfully generated PDF: {new_path.with_suffix('.pdf')}")
+                        except Exception as e:
+                            print(f"  PDF Conversion failed: {e}")
+                    else:
+                        print("  Skipping PDF: File is empty.")
                 else:
-                    print("  Skipping PDF: File is empty.")
-            else:
-                print("  PDF generation disabled via configuration.")
-            # --------------------------------------
+                    print("  PDF generation disabled via configuration.")
+                # --------------------------------------
 
 
 class TestbookException(Exception):
