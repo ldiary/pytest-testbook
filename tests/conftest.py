@@ -1,4 +1,10 @@
 # conftest.py
+def pytest_configure(config):
+    # Safely attach a custom attribute to the config object
+    config.custom_testbook_prefixes = [
+        "### TC-SYS-INT-"
+    ]
+
 
 def pytest_addoption(parser):
     group = parser.getgroup("testbook")

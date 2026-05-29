@@ -34,7 +34,7 @@ Features
 * Upload `testbook` in CI/CD pipepline for auto-execution using `pytest`
 
 
-Installation
+Getting Started
 ------------
 You will need to install playwright to generate pdf test reports. The side-effect is that you get a free playwright instance that you can use in your Testbooks.
 
@@ -56,6 +56,30 @@ to run tests manually in Jupyter. Or you can run:
 pytest -sv
 ```
 instead to let `pytest` discover your tests, collect them and execute them.
+
+Advanced Usage
+------------
+The default behaviour of the plugin is to look for Testbook cells that starts with any of these: `"### Given", "### And", "### When", "### Then", "### But"`
+
+```python
+def pytest_addoption(parser):
+    # Register a new INI option that accepts a list of strings
+    parser.addini(
+        name="testbook_step_prefixes",
+        help="List of markdown prefixes that indicate a test step in the notebook",
+        type="linelist",
+        default=["### Given", "### And", "### When", "### Then", "### But"]
+    )
+```
+
+You can override this behaviour and change it to your projects needs in you `conftest.py`, for example:
+```python
+def pytest_configure(config):
+    # Safely attach a custom attribute to the config object
+    config.custom_testbook_prefixes = [
+        "### TC-SYS-INT-"
+    ]
+```
 
 
 License

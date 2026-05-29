@@ -53,6 +53,16 @@ def pytest_addhooks(pluginmanager):
         pass
 
 
+def pytest_addoption(parser):
+    # Register a new INI option that accepts a list of strings
+    parser.addini(
+        name="testbook_step_prefixes",
+        help="List of markdown prefixes that indicate a test step in the notebook",
+        type="linelist",
+        default=["### Given", "### And", "### When", "### Then", "### But"]
+    )
+
+
 def pytest_collect_file(file_path, parent):
     """Modern pytest hook using pathlib.Path (file_path)."""
     if file_path.suffix == ".ipynb":
@@ -147,7 +157,16 @@ class Testbook(pytest.File):
                 if cell.source.startswith("## TC"):
                     case, _, _ = cell.source.partition("](https")
                     self.case = case.replace("## ", "").replace("[", "")
-                for step in ["### Given", "### And", "### When", "### Then", "### But"]:
+
+                # 1. Check if conftest.py injected a custom list
+                step_prefixes = getattr(self.config, "custom_testbook_prefixes", None)
+
+                # 2. Fall back to the default INI settings if nothing was injected
+                if not step_prefixes:
+                    # Fetch the dynamically configured list
+                    step_prefixes = self.config.getini("testbook_step_prefixes")
+
+                for step in step_prefixes:
                     if cell.source.startswith(step):
                         setup = False
                         self.header = cell.source.split("\n")[0].replace("### ", "")
